@@ -2,15 +2,18 @@ import { z } from "zod";
 import {
   ACCEPTED_VIDEO_EXTENSIONS,
   ACCEPTED_VIDEO_MIME_TYPES,
-  MAX_VIDEO_UPLOAD_BYTES
+  MAX_VIDEO_UPLOAD_BYTES,
+  YOUTUBE_URL_ERROR_MESSAGE
 } from "./constants";
+import { DEFAULT_SLIDE_THEME, SLIDE_THEME_VALUES } from "./slide-theme";
+import { isAllowedYouTubeUrl } from "./youtube-url";
 
 export const createProjectSchema = z.object({
   sourceType: z.enum(["youtube_url", "video_file"])
 });
 
 export const youtubeSourceSchema = z.object({
-  youtubeUrl: z.string().trim().min(1).refine(isAllowedYouTubeUrl, "YouTube URLを入力してください")
+  youtubeUrl: z.string().trim().min(1, "YouTube URLを入力してください").refine(isAllowedYouTubeUrl, YOUTUBE_URL_ERROR_MESSAGE)
 });
 
 const uploadPayloadSchema = z.object({
@@ -33,8 +36,8 @@ export const uploadCompleteSchema = uploadPayloadSchema.extend({
 
 export const settingsSchema = z.object({
   slideCount: z.number().int().min(5).max(20),
-  audience: z.enum(["beginner", "general", "business", "expert"]),
-  tone: z.enum(["friendly", "business", "minimal", "positive"]),
+  audience: z.literal("beginner").default("beginner"),
+  theme: z.enum(SLIDE_THEME_VALUES).default(DEFAULT_SLIDE_THEME),
   imageSize: z.enum(["2048x1152", "1024x768", "3840x2160"]),
   imageQuality: z.enum(["low", "medium", "high"]).default("medium"),
   outputFormat: z.literal("png").default("png")
@@ -66,40 +69,6 @@ export const regenerateSchema = z.object({
 export const exportJobSchema = z.object({
   exportType: z.literal("zip_images")
 });
-
-export function isAllowedYouTubeUrl(value: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return false;
-  }
-
-  if (!["https:", "http:"].includes(url.protocol)) {
-    return false;
-  }
-
-  const hostname = url.hostname.toLowerCase();
-  const allowedHost =
-    hostname === "youtu.be" ||
-    hostname === "youtube.com" ||
-    hostname === "www.youtube.com" ||
-    hostname === "m.youtube.com";
-
-  if (!allowedHost) {
-    return false;
-  }
-
-  if (hostname === "youtu.be") {
-    return url.pathname.length > 1;
-  }
-
-  if (url.pathname === "/watch") {
-    return Boolean(url.searchParams.get("v"));
-  }
-
-  return url.pathname.startsWith("/shorts/") || url.pathname.startsWith("/embed/");
-}
 
 function hasAcceptedExtension(filename: string): boolean {
   const lower = filename.toLowerCase();

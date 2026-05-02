@@ -16,6 +16,7 @@ import {
   HelpCircle,
   Info,
   Loader2,
+  Maximize2,
   Menu,
   Minus,
   Plus,
@@ -24,18 +25,20 @@ import {
   Trash2,
   Upload,
   Wand2,
+  X,
   Youtube
 } from "lucide-react";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AUDIENCE_OPTIONS,
   DIAGRAM_BADGE_CLASSES,
   DIAGRAM_LABELS,
   IMAGE_SIZE_OPTIONS,
-  TONE_OPTIONS,
+  YOUTUBE_URL_ERROR_MESSAGE,
   formatTimestamp
 } from "@/lib/constants";
-import type { Audience, DiagramType, ImageSize, Job, Tone } from "@/lib/types";
+import { DEFAULT_SLIDE_THEME, SLIDE_THEME_OPTIONS } from "@/lib/slide-theme";
+import type { DiagramType, ImageSize, Job, SlideTheme } from "@/lib/types";
+import { isAllowedYouTubeUrl } from "@/lib/youtube-url";
 
 type StepId = 1 | 2 | 3 | 4 | 5 | 6;
 type SourceTab = "youtube" | "file";
@@ -67,14 +70,8 @@ type ApiSlide = {
 
 type ApiJob = Job;
 
-const stepMeta: Array<{ id: StepId; title: string; subtitle: string }> = [
-  { id: 1, title: "入力", subtitle: "動画を入力する" },
-  { id: 2, title: "設定", subtitle: "生成の基本設定を選ぶ" },
-  { id: 3, title: "構成確認", subtitle: "AIが作った構成を確認・編集" },
-  { id: 4, title: "画像生成中", subtitle: "AIがスライド画像を生成" },
-  { id: 5, title: "レビュー", subtitle: "生成したスライドを確認・管理" },
-  { id: 6, title: "書き出し", subtitle: "スライドを出力する" }
-];
+const primaryCtaClassName =
+  "bg-gradient-to-r from-[#7b5cff] via-[#6548ef] to-[#4c2bd9] shadow-[0_16px_34px_rgba(91,54,223,0.30)] hover:from-[#866fff] hover:via-[#6d50f5] hover:to-[#5634e4] active:translate-y-px disabled:from-slate-300 disabled:via-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:active:translate-y-0";
 
 export default function Home() {
   const [step, setStep] = useState<StepId>(1);
@@ -83,8 +80,7 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [slideCount, setSlideCount] = useState(10);
-  const [audience, setAudience] = useState<Audience>("beginner");
-  const [tone, setTone] = useState<Tone>("friendly");
+  const [theme, setTheme] = useState<SlideTheme>(DEFAULT_SLIDE_THEME);
   const [imageSize, setImageSize] = useState<ImageSize>("2048x1152");
   const [slides, setSlides] = useState<ApiSlide[]>([]);
   const [selectedSlideId, setSelectedSlideId] = useState<string | null>(null);
@@ -160,6 +156,17 @@ export default function Home() {
 
   async function goToSettings() {
     setError(null);
+    const trimmedYoutubeUrl = youtubeUrl.trim();
+    if (sourceTab === "youtube") {
+      if (!trimmedYoutubeUrl) {
+        setError("YouTube URLを入力してください");
+        return;
+      }
+      if (!isAllowedYouTubeUrl(trimmedYoutubeUrl)) {
+        setError(YOUTUBE_URL_ERROR_MESSAGE);
+        return;
+      }
+    }
     setIsBusy(true);
     try {
       const sourceType = sourceTab === "youtube" ? "youtube_url" : "video_file";
@@ -171,7 +178,7 @@ export default function Home() {
       if (sourceTab === "youtube") {
         await api(`/api/projects/${project.projectId}/source/youtube`, {
           method: "POST",
-          body: { youtubeUrl }
+          body: { youtubeUrl: trimmedYoutubeUrl }
         });
       } else {
         if (!selectedFile) {
@@ -214,8 +221,7 @@ export default function Home() {
         method: "PUT",
         body: {
           slideCount,
-          audience,
-          tone,
+          theme,
           imageSize,
           imageQuality: "medium",
           outputFormat: "png"
@@ -358,10 +364,9 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col items-center gap-6">
-        <StepOverview currentStep={step} />
-        <div className="grid w-full max-w-6xl items-start gap-6 lg:grid-cols-[minmax(0,1fr)_430px_minmax(0,1fr)]">
+    <main className="min-h-[100dvh] sm:px-6 sm:py-6 lg:min-h-screen lg:px-8 lg:py-5">
+      <div className="mx-auto flex max-w-7xl flex-col items-center lg:gap-6">
+        <div className="grid w-full max-w-6xl items-start lg:gap-6 lg:grid-cols-[minmax(0,1fr)_430px_minmax(0,1fr)]">
           <ContextPanel step={step} slides={slides} imageSize={imageSize} />
           <PhoneFrame>
             {step === 1 && (
@@ -382,10 +387,8 @@ export default function Home() {
               <SettingsScreen
                 slideCount={slideCount}
                 setSlideCount={setSlideCount}
-                audience={audience}
-                setAudience={setAudience}
-                tone={tone}
-                setTone={setTone}
+                theme={theme}
+                setTheme={setTheme}
                 imageSize={imageSize}
                 setImageSize={setImageSize}
                 onBack={() => setStep(1)}
@@ -455,33 +458,6 @@ export default function Home() {
   );
 }
 
-function StepOverview({ currentStep }: { currentStep: StepId }) {
-  return (
-    <div className="grid w-full max-w-6xl grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-      {stepMeta.map((item) => (
-        <button
-          key={item.id}
-          className="group flex items-start gap-3 rounded-[8px] px-2 py-2 text-left"
-          type="button"
-          aria-current={currentStep === item.id}
-        >
-          <span
-            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold text-white shadow-soft ${
-              currentStep === item.id ? "bg-brand-600" : "bg-gradient-to-br from-brand-500 to-indigo-500"
-            }`}
-          >
-            {item.id}
-          </span>
-          <span className="min-w-0">
-            <span className="block text-xl font-bold leading-tight text-ink">{item.title}</span>
-            <span className="mt-1 block text-sm leading-tight text-slate-700">{item.subtitle}</span>
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function ContextPanel({ step, slides, imageSize }: { step: StepId; slides: ApiSlide[]; imageSize: ImageSize }) {
   return (
     <aside className="hidden lg:block">
@@ -499,7 +475,7 @@ function ContextPanel({ step, slides, imageSize }: { step: StepId; slides: ApiSl
             <span className="font-bold text-brand-600">{step}/6</span>
           </div>
           <div className="mt-3 h-2 rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-brand-600" style={{ width: `${(step / 6) * 100}%` }} />
+            <div className="h-full rounded-full bg-gradient-to-r from-[#7b5cff] to-[#4c2bd9]" style={{ width: `${(step / 6) * 100}%` }} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -553,32 +529,18 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
-    <section className="mx-auto w-full max-w-[390px]">
-      <div className="relative h-[812px] overflow-hidden rounded-[34px] border border-slate-200 bg-white shadow-phone">
-        <StatusBar />
-        {children}
+    <section className="mx-auto w-full sm:max-w-[440px] lg:max-w-[390px]">
+      <div className="relative flex min-h-[100dvh] flex-col bg-white sm:min-h-[calc(100dvh-3rem)] sm:rounded-[20px] sm:border sm:border-slate-200 sm:shadow-soft lg:h-[812px] lg:min-h-0 lg:overflow-hidden lg:rounded-[34px] lg:shadow-phone">
+        <div className="flex min-h-0 flex-1 flex-col">{children}</div>
         <HomeIndicator />
       </div>
     </section>
   );
 }
 
-function StatusBar() {
-  return (
-    <div className="flex h-10 items-center justify-between px-7 pt-3 text-[13px] font-bold">
-      <span>9:41</span>
-      <span className="flex items-center gap-1.5">
-        <span className="h-3 w-4 rounded-sm bg-slate-900" />
-        <span className="h-3 w-4 rounded-sm border border-slate-900" />
-        <span className="h-2 w-5 rounded-sm bg-slate-900" />
-      </span>
-    </div>
-  );
-}
-
 function HomeIndicator() {
   return (
-    <div className="absolute bottom-3 left-1/2 h-1 w-28 -translate-x-1/2 rounded-full bg-black" />
+    <div className="absolute bottom-3 left-1/2 hidden h-1 w-28 -translate-x-1/2 rounded-full bg-black lg:block" />
   );
 }
 
@@ -604,9 +566,13 @@ function ScreenHeader({
 
 function ScreenBody({ children, bottom }: { children: React.ReactNode; bottom?: React.ReactNode }) {
   return (
-    <div className="flex h-[758px] flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="phone-scroll flex-1 overflow-y-auto px-5 pb-4 pt-4">{children}</div>
-      {bottom ? <div className="border-t border-slate-100 bg-white px-5 pb-9 pt-3">{bottom}</div> : null}
+      {bottom ? (
+        <div className="border-t border-slate-100 bg-white px-5 pt-3 pb-[max(env(safe-area-inset-bottom),1rem)] lg:pb-9">
+          {bottom}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -634,7 +600,9 @@ function InputScreen({
   isBusy: boolean;
   error: string | null;
 }) {
-  const canContinue = sourceTab === "youtube" ? youtubeUrl.trim().length > 0 : Boolean(selectedFile);
+  const trimmedYoutubeUrl = youtubeUrl.trim();
+  const youtubeUrlError = trimmedYoutubeUrl && !isAllowedYouTubeUrl(trimmedYoutubeUrl) ? YOUTUBE_URL_ERROR_MESSAGE : null;
+  const canContinue = sourceTab === "youtube" ? trimmedYoutubeUrl.length > 0 && !youtubeUrlError : Boolean(selectedFile);
   return (
     <>
       <ScreenBody
@@ -669,11 +637,20 @@ function InputScreen({
             </div>
             <p className="mt-8 text-sm font-medium">YouTube URLを貼り付けてください</p>
             <input
-              className="mt-4 h-11 w-full rounded-[8px] border border-slate-200 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              aria-invalid={Boolean(youtubeUrlError)}
+              autoCapitalize="none"
+              className={`mt-4 h-11 w-full rounded-[8px] border px-3 text-sm outline-none focus:ring-2 ${
+                youtubeUrlError
+                  ? "border-rose-300 bg-rose-50 focus:border-rose-500 focus:ring-rose-100"
+                  : "border-slate-200 focus:border-brand-500 focus:ring-brand-100"
+              }`}
+              inputMode="url"
               placeholder="https://www.youtube.com/watch?v=xxxxx"
+              spellCheck={false}
               value={youtubeUrl}
               onChange={(event) => setYoutubeUrl(event.target.value)}
             />
+            {youtubeUrlError ? <p className="mt-3 text-left text-xs leading-5 text-rose-700">{youtubeUrlError}</p> : null}
           </div>
         ) : (
           <div className="pt-12">
@@ -708,10 +685,8 @@ function InputScreen({
 function SettingsScreen(props: {
   slideCount: number;
   setSlideCount: (value: number) => void;
-  audience: Audience;
-  setAudience: (value: Audience) => void;
-  tone: Tone;
-  setTone: (value: Tone) => void;
+  theme: SlideTheme;
+  setTheme: (value: SlideTheme) => void;
   imageSize: ImageSize;
   setImageSize: (value: ImageSize) => void;
   onBack: () => void;
@@ -749,8 +724,23 @@ function SettingsScreen(props: {
               </div>
             </div>
           </div>
-          <SelectField label="対象読者" value={props.audience} onChange={(value) => props.setAudience(value as Audience)} options={AUDIENCE_OPTIONS} />
-          <SelectField label="資料のトーン" value={props.tone} onChange={(value) => props.setTone(value as Tone)} options={TONE_OPTIONS} />
+          <div>
+            <p className="text-sm font-bold">スライドテーマ</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">サンプルを見て、動画に合う見せ方を選んでください。</p>
+            <div className="mt-3 space-y-3">
+              {SLIDE_THEME_OPTIONS.map((option) => (
+                <ThemeCard
+                  key={option.value}
+                  active={props.theme === option.value}
+                  label={option.label}
+                  recommendedFor={option.recommendedFor}
+                  sampleSrc={option.sampleSrc}
+                  shortDescription={option.shortDescription}
+                  onClick={() => props.setTheme(option.value)}
+                />
+              ))}
+            </div>
+          </div>
           <div>
             <p className="text-sm font-bold">生成画像サイズ</p>
             <div className="mt-2 space-y-2">
@@ -766,7 +756,7 @@ function SettingsScreen(props: {
                   }`}
                 >
                   {props.imageSize === option.value ? (
-                    <span className="grid h-5 w-5 place-items-center rounded-full bg-brand-600 text-white">
+                    <span className="grid h-5 w-5 place-items-center rounded-full bg-gradient-to-br from-[#7b5cff] to-[#4c2bd9] text-white">
                       <Check className="h-3 w-3" />
                     </span>
                   ) : (
@@ -786,6 +776,50 @@ function SettingsScreen(props: {
         <ErrorMessage message={props.error} />
       </ScreenBody>
     </>
+  );
+}
+
+function ThemeCard({
+  active,
+  label,
+  recommendedFor,
+  sampleSrc,
+  shortDescription,
+  onClick
+}: {
+  active: boolean;
+  label: string;
+  recommendedFor: string;
+  sampleSrc: string;
+  shortDescription: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-[116px] w-full gap-3 rounded-[8px] border p-2 text-left transition ${
+        active ? "border-brand-500 bg-brand-50 ring-2 ring-brand-100" : "border-slate-200 bg-white"
+      }`}
+    >
+      <span className="relative h-[78px] w-[104px] shrink-0 overflow-hidden rounded-[6px] border border-slate-200 bg-slate-50">
+        <img className="h-full w-full object-cover" src={sampleSrc} alt={`${label}のサンプル`} />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex items-center gap-2">
+          {active ? (
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#7b5cff] to-[#4c2bd9] text-white">
+              <Check className="h-3 w-3" />
+            </span>
+          ) : (
+            <Circle className="h-5 w-5 shrink-0 text-slate-400" />
+          )}
+          <span className="min-w-0 text-sm font-bold leading-5">{label}</span>
+        </span>
+        <span className="mt-1 text-xs leading-5 text-slate-600">{shortDescription}</span>
+        <span className="mt-auto pt-2 text-[11px] font-medium leading-4 text-slate-500">向き: {recommendedFor}</span>
+      </span>
+    </button>
   );
 }
 
@@ -997,6 +1031,33 @@ function ReviewScreen(props: {
   isBusy: boolean;
   error: string | null;
 }) {
+  const [previewSlideId, setPreviewSlideId] = useState<string | null>(null);
+  const previewSlide = useMemo(
+    () => props.slides.find((slide) => slide.id === previewSlideId && slide.assetUrl) ?? null,
+    [previewSlideId, props.slides]
+  );
+
+  useEffect(() => {
+    if (!previewSlide) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPreviewSlideId(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewSlide]);
+
+  const openSlidePreview = (slide: ApiSlide) => {
+    props.setSelectedSlideId(slide.id);
+    if (slide.assetUrl) {
+      setPreviewSlideId(slide.id);
+    }
+  };
+
   return (
     <>
       <ScreenHeader title="レビュー" action={<Grid2X2 className="h-5 w-5 text-slate-900" />} />
@@ -1048,37 +1109,48 @@ function ReviewScreen(props: {
         {props.reviewMode === "thumbnail" ? (
           <div className="mt-3 grid slide-grid gap-3">
             {props.slides.map((slide) => (
-              <button
+              <div
                 key={slide.id}
                 className={`overflow-hidden rounded-[8px] border bg-white text-left ${props.selectedSlideId === slide.id ? "border-brand-500 ring-2 ring-brand-100" : "border-slate-200"}`}
-                type="button"
-                onClick={() => props.setSelectedSlideId(slide.id)}
               >
-                <div className="relative aspect-[16/9] bg-slate-50">
+                <button className="group relative block aspect-[16/9] w-full bg-slate-50" type="button" onClick={() => openSlidePreview(slide)} aria-label={`${slide.title}を拡大表示`}>
                   <span className="absolute left-1 top-1 z-10 grid h-5 w-5 place-items-center rounded-[5px] bg-slate-900 text-[11px] font-bold text-white">
                     {slide.slideNumber}
                   </span>
                   {slide.assetUrl ? <img src={slide.assetUrl} alt={slide.title} className="h-full w-full object-cover" /> : <SlidePlaceholder slide={slide} dense />}
-                </div>
-                <p className="truncate px-2 py-2 text-xs font-bold">{slide.title}</p>
-              </button>
+                  {slide.assetUrl ? (
+                    <span className="absolute bottom-1 right-1 z-10 grid h-7 w-7 place-items-center rounded-[6px] bg-slate-950/75 text-white opacity-90 transition group-hover:bg-gradient-to-br group-hover:from-[#7b5cff] group-hover:to-[#4c2bd9]">
+                      <Maximize2 className="h-4 w-4" />
+                    </span>
+                  ) : null}
+                </button>
+                <button className="block w-full px-2 py-2 text-left" type="button" onClick={() => props.setSelectedSlideId(slide.id)}>
+                  <p className="truncate text-xs font-bold">{slide.title}</p>
+                </button>
+              </div>
             ))}
           </div>
         ) : (
           <div className="mt-3 space-y-2">
             {props.slides.map((slide) => (
-              <button
+              <div
                 key={slide.id}
                 className={`flex w-full items-center gap-3 rounded-[8px] border p-2 text-left ${props.selectedSlideId === slide.id ? "border-brand-500 bg-brand-50" : "border-slate-200 bg-white"}`}
-                type="button"
-                onClick={() => props.setSelectedSlideId(slide.id)}
               >
-                <span className="grid h-7 w-7 place-items-center rounded-full bg-slate-100 text-sm font-bold">{slide.slideNumber}</span>
-                <span className="min-w-0 flex-1">
+                <button className="group relative h-14 w-24 shrink-0 overflow-hidden rounded-[6px] bg-slate-50" type="button" onClick={() => openSlidePreview(slide)} aria-label={`${slide.title}を拡大表示`}>
+                  {slide.assetUrl ? <img src={slide.assetUrl} alt={slide.title} className="h-full w-full object-cover" /> : <SlidePlaceholder slide={slide} dense />}
+                  <span className="absolute left-1 top-1 grid h-5 w-5 place-items-center rounded-[5px] bg-slate-900 text-[11px] font-bold text-white">{slide.slideNumber}</span>
+                  {slide.assetUrl ? (
+                    <span className="absolute bottom-1 right-1 grid h-6 w-6 place-items-center rounded-[5px] bg-slate-950/75 text-white opacity-90 transition group-hover:bg-gradient-to-br group-hover:from-[#7b5cff] group-hover:to-[#4c2bd9]">
+                      <Maximize2 className="h-3.5 w-3.5" />
+                    </span>
+                  ) : null}
+                </button>
+                <button className="min-w-0 flex-1 text-left" type="button" onClick={() => props.setSelectedSlideId(slide.id)}>
                   <span className="block truncate text-sm font-bold">{slide.title}</span>
                   <span className="mt-1 block truncate text-xs text-slate-500">{slide.description}</span>
-                </span>
-              </button>
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -1099,6 +1171,25 @@ function ReviewScreen(props: {
         ) : null}
         <ErrorMessage message={props.error} />
       </ScreenBody>
+      {previewSlide?.assetUrl ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-3 backdrop-blur-sm sm:p-8" role="dialog" aria-modal="true" aria-labelledby="slide-preview-title" onClick={() => setPreviewSlideId(null)}>
+          <div className="relative w-full max-w-6xl rounded-[8px] bg-white p-3 shadow-2xl sm:p-4" onClick={(event) => event.stopPropagation()}>
+            <button className="absolute right-3 top-3 z-10 grid h-10 w-10 place-items-center rounded-[8px] bg-white/90 text-slate-900 shadow-sm transition hover:bg-slate-100" type="button" onClick={() => setPreviewSlideId(null)} aria-label="閉じる">
+              <X className="h-5 w-5" />
+            </button>
+            <div className="overflow-hidden rounded-[6px] bg-slate-100">
+              <img src={previewSlide.assetUrl} alt={previewSlide.title} className="mx-auto max-h-[calc(100vh-10rem)] w-full object-contain" />
+            </div>
+            <div className="mt-3 flex items-start gap-3 pr-12">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[6px] bg-slate-900 text-sm font-bold text-white">{previewSlide.slideNumber}</span>
+              <div className="min-w-0">
+                <h3 id="slide-preview-title" className="truncate text-sm font-bold text-slate-900">{previewSlide.title}</h3>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{previewSlide.description}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -1117,7 +1208,7 @@ function ExportScreen(props: {
       <ScreenHeader title="書き出し完了" onBack={props.onBack} />
       <ScreenBody>
         <div className="pt-8 text-center">
-          <div className="relative mx-auto grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-700 text-white shadow-soft">
+          <div className="relative mx-auto grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-[#8b75ff] to-[#4c2bd9] text-white shadow-soft">
             {ready ? <Check className="h-12 w-12" /> : <Loader2 className="h-10 w-10 animate-spin" />}
           </div>
           <h2 className="mt-8 text-xl font-bold">{ready ? "書き出しが完了しました！" : "書き出し中です"}</h2>
@@ -1141,7 +1232,11 @@ function ExportScreen(props: {
         <div className="mt-6">
           <p className="text-sm font-bold">一括ダウンロード</p>
           {props.downloadUrl ? (
-            <a className="mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-[8px] bg-brand-600 px-4 text-sm font-bold text-white shadow-soft" href={props.downloadUrl}>
+            <a
+              className={`mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-[8px] px-4 text-sm font-bold text-white transition ${primaryCtaClassName}`}
+              download="slide-images.zip"
+              href={props.downloadUrl}
+            >
               <Download className="h-5 w-5" />
               画像を一括ダウンロード（ZIP形式）
             </a>
@@ -1180,39 +1275,10 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-function SelectField({
-  label,
-  value,
-  onChange,
-  options
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: Array<{ label: string; value: string }>;
-}) {
-  return (
-    <label className="block">
-      <span className="text-sm font-bold">{label}</span>
-      <select
-        className="mt-2 h-12 w-full rounded-[8px] border border-slate-200 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
 function ProgressRow({ label, status, done, active }: { label: string; status: string; done?: boolean; active?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <span className={`grid h-6 w-6 place-items-center rounded-full text-white ${done ? "bg-emerald-500" : active ? "bg-brand-600" : "bg-slate-300"}`}>
+      <span className={`grid h-6 w-6 place-items-center rounded-full text-white ${done ? "bg-emerald-500" : active ? "bg-gradient-to-br from-[#7b5cff] to-[#4c2bd9]" : "bg-slate-300"}`}>
         {done ? <Check className="h-4 w-4" /> : active ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
       </span>
       <span className="min-w-0 flex-1">
@@ -1237,7 +1303,7 @@ function PrimaryButton({
 }) {
   return (
     <button
-      className={`flex h-14 w-full items-center justify-center gap-2 rounded-[8px] bg-brand-600 px-4 text-sm font-bold text-white shadow-soft transition disabled:cursor-not-allowed disabled:bg-slate-300 ${className}`}
+      className={`flex h-14 w-full items-center justify-center gap-2 rounded-[8px] px-4 text-sm font-bold text-white transition disabled:cursor-not-allowed ${primaryCtaClassName} ${className}`}
       disabled={disabled}
       onClick={onClick}
       type="button"
@@ -1260,7 +1326,7 @@ function SecondaryButton({
 }) {
   return (
     <button
-      className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-[8px] border border-slate-200 bg-white px-3 text-center text-xs font-bold text-brand-700 transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${className}`}
+      className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-[8px] border border-[#ded7ff] bg-gradient-to-r from-white via-white to-[#f2efff] px-3 text-center text-xs font-bold text-brand-700 transition hover:from-[#fbfaff] hover:to-[#ebe5ff] disabled:cursor-not-allowed disabled:border-slate-200 disabled:from-slate-100 disabled:via-slate-100 disabled:to-slate-100 disabled:text-slate-400 ${className}`}
       disabled={disabled}
       onClick={onClick}
       type="button"
@@ -1315,7 +1381,7 @@ function SlidePlaceholder({ slide, dense }: { slide: ApiSlide | null; dense?: bo
     <div className="flex h-full w-full flex-col bg-white p-3">
       <div className="flex items-center justify-between">
         <span className="h-2 w-12 rounded-full bg-slate-900" />
-        <span className="h-5 w-5 rounded-[5px] bg-brand-600" />
+        <span className="h-5 w-5 rounded-[5px] bg-gradient-to-br from-[#7b5cff] to-[#4c2bd9]" />
       </div>
       <div className="mt-auto grid grid-cols-3 items-end gap-1">
         <span className="h-8 rounded-[5px] bg-slate-100 ring-1 ring-slate-200" />

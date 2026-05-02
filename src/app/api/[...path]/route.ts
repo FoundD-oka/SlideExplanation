@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ZodError } from "zod";
 import { assetUrl } from "@/lib/ai";
 import {
   createProjectSchema,
@@ -196,10 +197,14 @@ async function handleRequest(method: string, request: NextRequest | null, contex
       const record = getExport(path[1]);
       if (!record) return notFound();
       const buffer = readStoredBuffer(record.storageKey);
+      const fileName = `slides-${record.projectId}.zip`;
       return new NextResponse(new Uint8Array(buffer), {
         headers: {
           "Content-Type": "application/zip",
-          "Content-Disposition": `attachment; filename="slides-${record.projectId}.zip"`
+          "Content-Disposition": `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+          "Content-Length": String(buffer.byteLength),
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff"
         }
       });
     }
@@ -218,8 +223,7 @@ async function handleRequest(method: string, request: NextRequest | null, contex
 
     return json({ error: "Not found" }, 404);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "エラーが発生しました";
-    return json({ error: message }, 400);
+    return json({ error: formatApiError(error) }, 400);
   }
 }
 
@@ -248,4 +252,14 @@ function json(body: unknown, status = 200): NextResponse {
 
 function notFound(): NextResponse {
   return json({ error: "Not found" }, 404);
+}
+
+function formatApiError(error: unknown): string {
+  if (error instanceof ZodError) {
+    return error.issues[0]?.message ?? "入力内容を確認してください";
+  }
+  if (error instanceof SyntaxError) {
+    return "リクエスト内容を読み取れませんでした。入力内容を確認してください。";
+  }
+  return error instanceof Error ? error.message : "エラーが発生しました";
 }

@@ -20,7 +20,7 @@ import {
 import type { Job, SlideWithAsset } from "./types";
 
 const STRUCTURE_DELAY_MS = 600;
-const IMAGE_DELAY_MS = 500;
+const DEFAULT_IMAGE_CONCURRENCY = 3;
 
 export function startStructureJob(projectId: string): Job {
   const job = createJob(projectId, "structure_generation");
@@ -150,16 +150,27 @@ async function runImageJob(jobId: string): Promise<void> {
 
     const slides = listSlides(job.projectId);
     let generatedCount = 0;
+    let failedCount = 0;
+    const totalSlides = slides.length;
+    const concurrency = getImageConcurrency(totalSlides);
 
-    for (const slide of slides) {
-      assertNotCancelled(jobId);
+    slides.forEach((slide) => updateSlideStatus(slide.id, "generating"));
+    updateJob(jobId, {
+      totalSlides,
+      progressMessage: concurrency > 1 ? `画像を${concurrency}枚ずつ生成中` : "画像を生成中"
+    });
+
+    await runLimited(slides, concurrency, async (slide) => {
+      if (isCancelled(jobId)) {
+        return;
+      }
+
       updateJob(jobId, {
         currentSlideNumber: slide.slideNumber,
-        totalSlides: slides.length,
-        progressPercent: Math.round((generatedCount / slides.length) * 90),
-        progressMessage: `スライド ${slide.slideNumber}/${slides.length} を生成中`
+        totalSlides,
+        progressPercent: Math.round(((generatedCount + failedCount) / totalSlides) * 90),
+        progressMessage: `スライド ${generatedCount + failedCount + 1}/${totalSlides} を生成中`
       });
-      updateSlideStatus(slide.id, "generating");
 
       try {
         const version = latestAssetVersion(slide.id) + 1;
@@ -168,17 +179,31 @@ async function runImageJob(jobId: string): Promise<void> {
           throw new Error("スライドが見つかりません");
         }
         const assetInput = await generateSlideImage(latestSlide, settings, version);
+        if (isCancelled(jobId)) {
+          return;
+        }
         addSlideAsset(assetInput);
         updateSlideStatus(slide.id, "generated");
         generatedCount += 1;
+        updateJob(jobId, {
+          progressPercent: Math.round(((generatedCount + failedCount) / totalSlides) * 90),
+          progressMessage: `${generatedCount}/${totalSlides} 枚の画像を生成済み`
+        });
       } catch (error) {
+        if (isCancelled(jobId)) {
+          return;
+        }
         console.error("Image generation failed", error);
         updateSlideStatus(slide.id, "failed");
         addJobEvent(jobId, "slide_failed", "画像生成に失敗しました", { slideId: slide.id });
+        failedCount += 1;
+        updateJob(jobId, {
+          progressPercent: Math.round(((generatedCount + failedCount) / totalSlides) * 90),
+          progressMessage: `${generatedCount}/${totalSlides} 枚の画像を生成済み`
+        });
       }
-
-      await delay(IMAGE_DELAY_MS);
-    }
+    });
+    assertNotCancelled(jobId);
 
     updateJob(jobId, {
       currentStep: "finishing",
@@ -291,4 +316,29 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+async function runLimited<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>
+): Promise<void> {
+  let nextIndex = 0;
+  const workerCount = Math.min(concurrency, items.length);
+
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex];
+      nextIndex += 1;
+      await worker(item);
+    }
+  }));
+}
+
+function getImageConcurrency(totalSlides: number): number {
+  const parsed = Number(process.env.IMAGE_GENERATION_CONCURRENCY ?? DEFAULT_IMAGE_CONCURRENCY);
+  if (!Number.isFinite(parsed)) {
+    return Math.min(DEFAULT_IMAGE_CONCURRENCY, Math.max(totalSlides, 1));
+  }
+  return Math.min(Math.max(1, Math.floor(parsed)), Math.max(totalSlides, 1));
 }

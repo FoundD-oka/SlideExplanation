@@ -11,8 +11,13 @@ export type ProjectStatus =
   | "failed"
   | "cancelled";
 
-export type Audience = "beginner" | "general" | "business" | "expert";
-export type Tone = "friendly" | "business" | "minimal" | "positive";
+export type Audience = "beginner";
+export type SlideTheme =
+  | "minimal_infographic"
+  | "timeline_process"
+  | "concept_mindmap"
+  | "visual_storyboard"
+  | "comparison_highlight";
 export type ImageSize = "2048x1152" | "1024x768" | "3840x2160";
 export type ImageQuality = "low" | "medium" | "high";
 export type OutputFormat = "png";
@@ -50,7 +55,7 @@ export interface ProjectSettings {
   projectId: string;
   slideCount: number;
   audience: Audience;
-  tone: Tone;
+  theme: SlideTheme;
   imageSize: ImageSize;
   imageQuality: ImageQuality;
   outputFormat: OutputFormat;

@@ -1,9 +1,12 @@
-import type { Audience, DiagramType, ImageSize, Tone } from "./types";
+import type { DiagramType, ImageSize } from "./types";
 
 export const MAX_VIDEO_UPLOAD_BYTES = 2_000_000_000;
 
 export const ACCEPTED_VIDEO_MIME_TYPES = ["video/mp4", "video/quicktime", "video/avi"] as const;
 export const ACCEPTED_VIDEO_EXTENSIONS = [".mp4", ".mov", ".avi"] as const;
+
+export const YOUTUBE_URL_ERROR_MESSAGE =
+  "公開YouTube動画のURLを入力してください。対応形式は https://www.youtube.com/watch、https://youtu.be、https://www.youtube.com/shorts です。YouTube以外のURLやチャンネル・プレイリストのURLは使えません。";
 
 export const IMAGE_SIZE_OPTIONS: Array<{
   label: string;
@@ -19,20 +22,6 @@ export const IMAGE_SIZE_OPTIONS: Array<{
     helper: "高解像度は生成に時間がかかる場合があります。"
   },
   { label: "4:3", value: "1024x768" }
-];
-
-export const AUDIENCE_OPTIONS: Array<{ label: string; value: Audience }> = [
-  { label: "初学者", value: "beginner" },
-  { label: "大学生・一般", value: "general" },
-  { label: "ビジネスパーソン", value: "business" },
-  { label: "専門家・上級者", value: "expert" }
-];
-
-export const TONE_OPTIONS: Array<{ label: string; value: Tone }> = [
-  { label: "わかりやすく・親しみやすい", value: "friendly" },
-  { label: "ビジネスライク・信頼感", value: "business" },
-  { label: "シンプル・ミニマル", value: "minimal" },
-  { label: "明るく・ポジティブ", value: "positive" }
 ];
 
 export const DIAGRAM_LABELS: Record<DiagramType, string> = {

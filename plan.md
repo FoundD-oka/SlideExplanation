@@ -157,8 +157,7 @@ YouTube URL欄の補足文は以下にする。
 設定項目は以下に絞る。
 
 * スライド枚数
-* 対象読者
-* 資料のトーン
+* スライドテーマ
 * 生成画像サイズ
 
 スライド枚数
@@ -169,23 +168,19 @@ YouTube URL欄の補足文は以下にする。
 
 MVPでは、推奨は8〜12枚とする。
 
-対象読者
+対象読者は初学者に固定し、ユーザーには選択させない。
+
+スライドテーマ
 
 選択肢は以下。
 
-* 初学者
-* 大学生・一般
-* ビジネスパーソン
-* 専門家・上級者
+* シンプル図解
+* 流れ・手順
+* 要点マップ
+* コマ割り解説
+* 比較まとめ
 
-資料のトーン
-
-選択肢は以下。
-
-* わかりやすく・親しみやすい
-* ビジネスライク・信頼感
-* シンプル・ミニマル
-* 明るく・ポジティブ
+UIではプルダウンではなく、各テーマのサンプル画像、短い説明、向いている動画を表示するカード選択にする。
 
 生成画像サイズ
 
@@ -407,7 +402,7 @@ CREATE TABLE project_settings (
   project_id UUID NOT NULL REFERENCES projects(id),
   slide_count INTEGER NOT NULL,
   audience TEXT NOT NULL,
-  tone TEXT NOT NULL,
+  theme TEXT NOT NULL,
   image_size TEXT NOT NULL,
   image_quality TEXT NOT NULL,
   output_format TEXT NOT NULL,
@@ -651,8 +646,7 @@ Request:
 
 {
   "slideCount": 10,
-  "audience": "beginner",
-  "tone": "friendly",
+  "theme": "minimal_infographic",
   "imageSize": "2048x1152",
   "imageQuality": "medium",
   "outputFormat": "png"
@@ -661,8 +655,7 @@ Request:
 バリデーション:
 
 * slideCount: 5〜20
-* audience: beginner、general、business、expert
-* tone: friendly、business、minimal、positive
+* theme: minimal_infographic、timeline_process、concept_mindmap、visual_storyboard、comparison_highlight
 * imageSize: 2048x1152、1024x768、3840x2160
 * imageQuality: low、medium、high
 * outputFormat: png
@@ -1014,8 +1007,8 @@ MVPでは、アップロード済みファイルをサーバーからGemini File
 - JSON Schemaに完全準拠する
 ユーザー設定:
 - スライド枚数: {{slide_count}}
-- 対象読者: {{audience}}
-- 資料のトーン: {{tone}}
+- 対象読者: 初学者
+- スライドテーマ: {{theme}}
 - 生成画像サイズ: {{image_size}}
 出力:
 JSONのみ。
@@ -1089,10 +1082,10 @@ Design requirements:
 - Keep the background clean and not too busy.
 - Avoid logos, watermarks, fake UI screenshots, and tiny unreadable labels.
 - Do not add information that is not supported by the provided content.
-Tone:
-{{tone}}
+Theme:
+{{theme}}
 Audience:
-{{audience}}
+初学者
 
 9.5 図解タイプ別の追加指示
 
@@ -1839,7 +1832,7 @@ Phase 7：QA・運用準備
 対策:
 
 * 全スライド共通のstyle promptを使う
-* tone別の固定プロンプトを用意する
+* テーマ別の固定プロンプトを用意する
 * 将来、ブランドテンプレート・参照画像・後載せ化で改善する
 
 20.3 Geminiが動画にない内容を補う

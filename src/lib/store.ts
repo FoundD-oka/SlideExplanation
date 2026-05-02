@@ -16,6 +16,7 @@ import type {
   SourceType,
   VideoSource
 } from "./types";
+import { DEFAULT_SLIDE_THEME, SLIDE_THEME_VALUES } from "./slide-theme";
 
 const storageDir = process.env.APP_STORAGE_DIR || ".data";
 const STORAGE_ROOT = path.isAbsolute(storageDir)
@@ -59,13 +60,25 @@ export function readDb(): DatabaseShape {
   return {
     projects: parsed.projects ?? [],
     videoSources: parsed.videoSources ?? [],
-    settings: parsed.settings ?? [],
+    settings: (parsed.settings ?? []).map(normalizeSettings),
     slides: parsed.slides ?? [],
     slideAssets: parsed.slideAssets ?? [],
     jobs: parsed.jobs ?? [],
     jobEvents: parsed.jobEvents ?? [],
     exports: parsed.exports ?? []
   };
+}
+
+function normalizeSettings(settings: ProjectSettings | (Partial<ProjectSettings> & { tone?: unknown })): ProjectSettings {
+  return {
+    ...settings,
+    audience: "beginner",
+    theme: isSlideTheme(settings.theme) ? settings.theme : DEFAULT_SLIDE_THEME
+  } as ProjectSettings;
+}
+
+function isSlideTheme(value: unknown): value is ProjectSettings["theme"] {
+  return typeof value === "string" && SLIDE_THEME_VALUES.includes(value as ProjectSettings["theme"]);
 }
 
 export function writeDb(db: DatabaseShape): void {

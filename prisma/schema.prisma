@@ -48,7 +48,7 @@ model ProjectSettings {
   projectId    String   @unique @map("project_id") @db.Uuid
   slideCount   Int      @map("slide_count")
   audience     String
-  tone         String
+  theme        String
   imageSize    String   @map("image_size")
   imageQuality String   @map("image_quality")
   outputFormat String   @map("output_format")

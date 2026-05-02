@@ -1,6 +1,6 @@
 import { PNG } from "pngjs";
 import { DIAGRAM_LABELS, parseImageSize } from "./constants";
-import { SLIDE_THEME_BASE_PROMPT, SLIDE_THEME_KEYWORDS, SLIDE_THEME_NAME, SLIDE_THEME_PROMPTS } from "./slide-theme";
+import { getSlideTheme, getSlideThemeKeywords, getSlideThemePrompt, SLIDE_THEME_PROMPTS } from "./slide-theme";
 import {
   getSettings,
   getVideoSource,
@@ -39,11 +39,7 @@ const GEMINI_SCHEMA = {
           "learning_goal",
           "source_timestamps",
           "main_points",
-          "visual_concept",
-          "image_prompt_for_gpt_image_2",
-          "speaker_notes",
-          "misunderstanding_risk",
-          "verification_note"
+          "visual_concept"
         ],
         properties: {
           slide_number: { type: "integer" },
@@ -56,11 +52,7 @@ const GEMINI_SCHEMA = {
           learning_goal: { type: "string" },
           source_timestamps: { type: "array", items: { type: "string" } },
           main_points: { type: "array", items: { type: "string" } },
-          visual_concept: { type: "string" },
-          image_prompt_for_gpt_image_2: { type: "string" },
-          speaker_notes: { type: "string" },
-          misunderstanding_risk: { type: "string" },
-          verification_note: { type: "string" }
+          visual_concept: { type: "string" }
         }
       }
     }
@@ -76,10 +68,10 @@ interface GeminiSlide {
   source_timestamps: string[];
   main_points: string[];
   visual_concept: string;
-  image_prompt_for_gpt_image_2: string;
-  speaker_notes: string;
-  misunderstanding_risk: string;
-  verification_note: string;
+  image_prompt_for_gpt_image_2?: string;
+  speaker_notes?: string;
+  misunderstanding_risk?: string;
+  verification_note?: string;
 }
 
 interface GeminiResponseShape {
@@ -114,9 +106,10 @@ export async function generateSlideImage(
   const imageModel = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
   const { width, height } = parseImageSize(settings.imageSize);
   const openAiKey = process.env.OPENAI_API_KEY?.trim();
+  const imagePrompt = buildOpenAIImagePrompt(slide, settings);
 
   if (openAiKey) {
-    const generated = await generateImageWithOpenAI(slide, settings, openAiKey, imageModel);
+    const generated = await generateImageWithOpenAI(imagePrompt, settings, openAiKey, imageModel);
     const fileName = `slide_${slide.slideNumber.toString().padStart(2, "0")}_v${version}.png`;
     const storageKey = writeAssetBuffer(slide.projectId, fileName, generated.buffer);
     return {
@@ -130,7 +123,7 @@ export async function generateSlideImage(
       provider: "openai",
       providerModel: imageModel,
       providerRequestId: generated.requestId,
-      promptHash: promptHash(slide.imagePrompt)
+      promptHash: promptHash(imagePrompt)
     };
   }
 
@@ -154,25 +147,47 @@ export async function generateSlideImage(
     provider: "mock",
     providerModel: "local-mock",
     providerRequestId: null,
-    promptHash: promptHash(slide.imagePrompt)
+    promptHash: promptHash(imagePrompt)
   };
 }
 
 export function buildImagePrompt(slide: Pick<Slide, "title" | "learningGoal" | "mainPoints" | "diagramType" | "visualConcept">, settings: ProjectSettings): string {
   const { aspectRatio } = parseImageSize(settings.imageSize);
+  const theme = getSlideTheme(settings.theme);
   return [
     "Create a complete educational slide image.",
-    `Theme: ${SLIDE_THEME_BASE_PROMPT}`,
-    `Theme keywords: ${SLIDE_THEME_KEYWORDS}`,
+    `Theme: ${theme.name}`,
+    `Theme prompt: ${getSlideThemePrompt(settings.theme, slide.diagramType)}`,
+    `Theme keywords: ${getSlideThemeKeywords(settings.theme)}`,
     `Canvas: ${settings.imageSize}, aspect ratio ${aspectRatio}.`,
     `Slide purpose: ${slide.learningGoal}`,
     `Slide title: ${slide.title}`,
     `Content to visualize: ${slide.mainPoints.join(" / ")}`,
-    `Diagram type: ${DIAGRAM_LABELS[slide.diagramType]}. ${SLIDE_THEME_PROMPTS[slide.diagramType]}`,
+    `Diagram type: ${DIAGRAM_LABELS[slide.diagramType]}.`,
     `Visual concept: ${slide.visualConcept}`,
-    "Design requirements: white background, clean infographic layout, clear hierarchy, short labels only, bold icons, polished modern layout, no logos, no watermarks, no tiny unreadable labels.",
-    `Tone: ${settings.tone}`,
-    `Audience: ${settings.audience}`
+    "Visible text language: Japanese only. Use the Japanese slide title exactly, and use short Japanese labels for every visible label. Do not use English sentences, English headings, Lorem Ipsum, placeholder text, watermarks, or logos.",
+    "Design requirements: white background, clean infographic layout, clear hierarchy, short labels only, bold icons, polished modern layout, no tiny unreadable labels.",
+    "Audience: beginner learners. Keep explanations simple, concrete, and easy to review."
+  ].join("\n");
+}
+
+function buildOpenAIImagePrompt(
+  slide: Pick<Slide, "title" | "learningGoal" | "mainPoints" | "diagramType" | "visualConcept" | "imagePrompt">,
+  settings: ProjectSettings
+): string {
+  const basePrompt = buildImagePrompt(slide, settings);
+  const savedPrompt = slide.imagePrompt.trim();
+  if (!savedPrompt) {
+    return basePrompt;
+  }
+  if (savedPrompt.includes("Visible text language: Japanese only") && savedPrompt.includes(`Slide title: ${slide.title}`)) {
+    return savedPrompt;
+  }
+  return [
+    basePrompt,
+    "",
+    "Additional saved style notes. Follow these only when they do not conflict with the Japanese-only visible text requirement above:",
+    savedPrompt
   ].join("\n");
 }
 
@@ -190,11 +205,15 @@ async function generateStructureWithGemini(
   apiKey: string
 ): Promise<{ title: string; slides: Slide[] }> {
   const model = process.env.GEMINI_MODEL || "gemini-3-flash-preview";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const prompt = buildGeminiPrompt(settings);
+  const videoUri = normalizeYouTubeUrlForGemini(source.youtubeUrl);
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey
+    },
     body: JSON.stringify({
       contents: [
         {
@@ -202,7 +221,7 @@ async function generateStructureWithGemini(
           parts: [
             {
               fileData: {
-                fileUri: source.youtubeUrl
+                fileUri: videoUri
               }
             },
             { text: prompt }
@@ -211,14 +230,14 @@ async function generateStructureWithGemini(
       ],
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: GEMINI_SCHEMA
+        responseJsonSchema: GEMINI_SCHEMA
       }
     })
   });
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Gemini API error ${response.status}: ${detail}`);
+    throw new Error(formatGeminiError(response.status, detail));
   }
 
   const json = await response.json();
@@ -232,6 +251,7 @@ async function generateStructureWithGemini(
   const slides: Slide[] = parsed.slides.slice(0, settings.slideCount).map((slide, index) => {
     const start = parseTimestamp(slide.source_timestamps[0]) ?? index * 120;
     const end = parseTimestamp(slide.source_timestamps[1]) ?? start + 80;
+    const sourceImagePrompt = slide.image_prompt_for_gpt_image_2?.trim();
     const base: Slide = {
       id: newId(),
       projectId: settings.projectId,
@@ -244,10 +264,10 @@ async function generateStructureWithGemini(
       learningGoal: slide.learning_goal,
       mainPoints: slide.main_points,
       visualConcept: slide.visual_concept,
-      imagePrompt: applyThemeToImagePrompt(slide.image_prompt_for_gpt_image_2, slide.diagram_type),
-      speakerNotes: slide.speaker_notes,
-      misunderstandingRisk: slide.misunderstanding_risk,
-      verificationNote: slide.verification_note,
+      imagePrompt: sourceImagePrompt ? applyThemeToImagePrompt(sourceImagePrompt, slide.diagram_type) : "",
+      speakerNotes: slide.speaker_notes ?? slide.description,
+      misunderstandingRisk: slide.misunderstanding_risk ?? (slide.diagram_type === "misunderstanding" ? "動画内容に基づき確認が必要" : null),
+      verificationNote: slide.verification_note ?? "未確認",
       status: "ready_for_generation",
       createdAt: timestamp,
       updatedAt: timestamp
@@ -256,6 +276,54 @@ async function generateStructureWithGemini(
   });
 
   return { title: parsed.video_title || "動画理解サポート資料", slides };
+}
+
+function normalizeYouTubeUrlForGemini(value: string | null): string {
+  if (!value) {
+    throw new Error("YouTube URLが保存されていません");
+  }
+
+  const parsed = new URL(value.trim());
+  const hostname = parsed.hostname.toLowerCase();
+  let videoId: string | null = null;
+
+  if (hostname === "youtu.be") {
+    videoId = parsed.pathname.split("/").filter(Boolean)[0] ?? null;
+  } else if (parsed.pathname === "/watch") {
+    videoId = parsed.searchParams.get("v");
+  } else if (parsed.pathname.startsWith("/shorts/") || parsed.pathname.startsWith("/embed/")) {
+    videoId = parsed.pathname.split("/").filter(Boolean)[1] ?? null;
+  }
+
+  if (!videoId) {
+    return value.trim();
+  }
+
+  const normalized = new URL("https://www.youtube.com/watch");
+  normalized.searchParams.set("v", videoId);
+  return normalized.toString();
+}
+
+function formatGeminiError(status: number, detail: string): string {
+  const apiMessage = extractGeminiErrorMessage(detail);
+  if (status === 400 && apiMessage.includes("invalid argument")) {
+    return [
+      "Gemini APIがリクエストを受け付けませんでした。",
+      "公開YouTube動画のURLか確認してください。問題が続く場合は動画ファイルとしてアップロードしてください。",
+      `詳細: Gemini API error ${status}: ${apiMessage}`
+    ].join(" ");
+  }
+
+  return `Gemini API error ${status}: ${apiMessage}`;
+}
+
+function extractGeminiErrorMessage(detail: string): string {
+  try {
+    const parsed = JSON.parse(detail) as { error?: { message?: string } };
+    return parsed.error?.message ?? detail;
+  } catch {
+    return detail;
+  }
 }
 
 function generateMockStructure(
@@ -322,7 +390,7 @@ function generateMockStructure(
 }
 
 async function generateImageWithOpenAI(
-  slide: Slide,
+  imagePrompt: string,
   settings: ProjectSettings,
   apiKey: string,
   imageModel: string
@@ -335,7 +403,7 @@ async function generateImageWithOpenAI(
     },
     body: JSON.stringify({
       model: imageModel,
-      prompt: slide.imagePrompt,
+      prompt: imagePrompt,
       size: settings.imageSize,
       quality: settings.imageQuality,
       output_format: settings.outputFormat,
@@ -366,6 +434,7 @@ async function generateImageWithOpenAI(
 }
 
 function buildGeminiPrompt(settings: ProjectSettings): string {
+  const theme = getSlideTheme(settings.theme);
   return `あなたはYouTube動画・動画教材を、理解サポート用スライドに変換する編集者です。
 目的:
 動画内容を、視聴者が短時間で理解・復習・共有できるスライド構成に変換してください。
@@ -379,33 +448,25 @@ function buildGeminiPrompt(settings: ProjectSettings): string {
 - スライド枚数は指定値に合わせる
 - 各スライドは1つの学習ゴールだけにする
 - 各スライドに根拠となる動画タイムスタンプを付ける
-- 画像生成用プロンプトは英語で書く
+- visual_concept は後段の画像生成に使えるよう、図解の構図・要素・関係性を具体的に書く
 - 画像内に長文テキストを入れない
 - 事実、推測、補足を混ぜない
 - JSON Schemaに完全準拠する
 ユーザー設定:
 - スライド枚数: ${settings.slideCount}
-- 対象読者: ${settings.audience}
-- 資料のトーン: ${settings.tone}
+- 対象読者: 初学者
 - 生成画像サイズ: ${settings.imageSize}
-スライド画像テーマ: ${SLIDE_THEME_NAME}
-- ${SLIDE_THEME_BASE_PROMPT}
-- 図解タイプ別の表現:
-  - タイムライン: ${SLIDE_THEME_PROMPTS.timeline}
-  - 概念図: ${SLIDE_THEME_PROMPTS.concept_map}
-  - 比較図: ${SLIDE_THEME_PROMPTS.comparison}
-  - 誤解ポイント: ${SLIDE_THEME_PROMPTS.misunderstanding}
-- image_prompt_for_gpt_image_2 には以下のキーワードを自然に含める: ${SLIDE_THEME_KEYWORDS}
+スライド画像テーマ: ${theme.name}
+- ${theme.prompt}
+- テーマキーワード: ${getSlideThemeKeywords(settings.theme)}
 出力:
 JSONのみ。`;
 }
 
 function applyThemeToImagePrompt(imagePrompt: string, diagramType: DiagramType): string {
   return [
-    `Theme: ${SLIDE_THEME_NAME}`,
-    SLIDE_THEME_BASE_PROMPT,
+    "Visible text language: Japanese only. Use short Japanese labels only.",
     `Diagram-specific theme: ${SLIDE_THEME_PROMPTS[diagramType]}`,
-    `Keywords to reflect: ${SLIDE_THEME_KEYWORDS}`,
     imagePrompt
   ].filter(Boolean).join("\n");
 }
