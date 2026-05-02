@@ -25,8 +25,7 @@ import {
   Trash2,
   Upload,
   Wand2,
-  X,
-  Youtube
+  X
 } from "lucide-react";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -365,10 +364,8 @@ export default function Home() {
 
   return (
     <main className="min-h-[100dvh] sm:px-6 sm:py-6 lg:min-h-screen lg:px-8 lg:py-5">
-      <div className="mx-auto flex max-w-7xl flex-col items-center lg:gap-6">
-        <div className="grid w-full max-w-6xl items-start lg:gap-6 lg:grid-cols-[minmax(0,1fr)_430px_minmax(0,1fr)]">
-          <ContextPanel step={step} slides={slides} imageSize={imageSize} />
-          <PhoneFrame>
+      <div className="mx-auto flex w-full max-w-[440px] flex-col items-center">
+        <PhoneFrame>
             {step === 1 && (
               <InputScreen
                 sourceTab={sourceTab}
@@ -450,80 +447,9 @@ export default function Home() {
                 onReset={resetFlow}
               />
             )}
-          </PhoneFrame>
-          <PreviewPanel slides={slides} selectedSlide={selectedSlide} step={step} />
-        </div>
+        </PhoneFrame>
       </div>
     </main>
-  );
-}
-
-function ContextPanel({ step, slides, imageSize }: { step: StepId; slides: ApiSlide[]; imageSize: ImageSize }) {
-  return (
-    <aside className="hidden lg:block">
-      <div className="sticky top-5 space-y-4">
-        <div className="rounded-[8px] border border-white/80 bg-white/75 p-4 shadow-soft backdrop-blur">
-          <p className="text-xs font-bold uppercase tracking-[0.08em] text-brand-600">MVP Flow</p>
-          <h1 className="mt-2 text-2xl font-bold">Video Slide Assistant</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            入力、設定、構成確認、画像生成、レビュー、ZIP書き出しまでを1本の導線で実装しています。
-          </p>
-        </div>
-        <div className="rounded-[8px] border border-slate-200 bg-white p-4">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-500">現在のステップ</span>
-            <span className="font-bold text-brand-600">{step}/6</span>
-          </div>
-          <div className="mt-3 h-2 rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-gradient-to-r from-[#7b5cff] to-[#4c2bd9]" style={{ width: `${(step / 6) * 100}%` }} />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Metric label="スライド" value={`${slides.length || 10}枚`} />
-          <Metric label="生成画像サイズ" value={imageSize} />
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-function PreviewPanel({ slides, selectedSlide, step }: { slides: ApiSlide[]; selectedSlide: ApiSlide | null; step: StepId }) {
-  return (
-    <aside className="hidden xl:block">
-      <div className="sticky top-5 rounded-[8px] border border-slate-200 bg-white p-4 shadow-soft">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-bold">プレビュー</p>
-          <Grid2X2 className="h-4 w-4 text-slate-400" />
-        </div>
-        <div className="mt-4 aspect-[16/9] overflow-hidden rounded-[8px] border border-slate-200 bg-slate-50">
-          {selectedSlide?.assetUrl ? (
-            <img src={selectedSlide.assetUrl} alt={selectedSlide.title} className="h-full w-full object-cover" />
-          ) : (
-            <SlidePlaceholder slide={selectedSlide} />
-          )}
-        </div>
-        <p className="mt-3 text-sm font-bold">{selectedSlide?.title ?? "生成前のプレビュー"}</p>
-        <p className="mt-1 text-xs leading-5 text-slate-500">
-          {step < 5 ? "レビュー前は構成内容をもとにした仮表示です。" : "生成済み画像の最新版を表示します。"}
-        </p>
-        <div className="mt-4 grid grid-cols-4 gap-2">
-          {slides.slice(0, 8).map((slide) => (
-            <div key={slide.id} className="aspect-[16/9] overflow-hidden rounded-[6px] border border-slate-200 bg-slate-50">
-              {slide.assetUrl ? <img src={slide.assetUrl} alt="" className="h-full w-full object-cover" /> : <SlidePlaceholder slide={slide} dense />}
-            </div>
-          ))}
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[8px] border border-slate-200 bg-white p-3">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-bold">{value}</p>
-    </div>
   );
 }
 
@@ -633,7 +559,10 @@ function InputScreen({
         {sourceTab === "youtube" ? (
           <div className="pt-14 text-center">
             <div className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-rose-50">
-              <Youtube className="h-12 w-12 fill-red-600 text-red-600" />
+              <svg viewBox="0 0 28 20" className="h-12 w-[3.75rem]" aria-hidden="true">
+                <rect width="28" height="20" rx="5" fill="#FF0000" />
+                <path d="M11.5 6.2v7.6L18 10z" fill="white" />
+              </svg>
             </div>
             <p className="mt-8 text-sm font-medium">YouTube URLを貼り付けてください</p>
             <input
