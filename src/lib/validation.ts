@@ -35,7 +35,7 @@ export const uploadCompleteSchema = uploadPayloadSchema.extend({
 });
 
 export const settingsSchema = z.object({
-  slideCount: z.number().int().min(5).max(20),
+  slideCount: z.number().int().min(4).max(20),
   audience: z.literal("beginner").default("beginner"),
   theme: z.enum(SLIDE_THEME_VALUES).default(DEFAULT_SLIDE_THEME),
   imageSize: z.enum(["2048x1152", "1024x768", "3840x2160"]),

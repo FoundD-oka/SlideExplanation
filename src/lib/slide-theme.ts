@@ -1,8 +1,9 @@
 import type { DiagramType, SlideTheme } from "./types";
 
-export const DEFAULT_SLIDE_THEME: SlideTheme = "minimal_infographic";
+export const DEFAULT_SLIDE_THEME: SlideTheme = "visual_abstract";
 
 export const SLIDE_THEME_VALUES = [
+  "visual_abstract",
   "minimal_infographic",
   "timeline_process",
   "concept_mindmap",
@@ -20,6 +21,28 @@ type SlideThemeDefinition = {
 };
 
 const SLIDE_THEMES: Record<SlideTheme, SlideThemeDefinition> = {
+  visual_abstract: {
+    name: "図解要約",
+    shortDescription: "論文要旨のように、動画の結論と要点を1枚に凝縮。",
+    recommendedFor: "研究紹介・要約・全体像の俯瞰",
+    sampleSrc: "/theme-samples/visualabstract.png",
+    prompt: [
+      "Use a scientific visual abstract style on a clean white or very light neutral background.",
+      "Compose a single integrated diagram that summarizes the entire topic at a glance:",
+      "show inputs/context on the left, the core process or mechanism in the middle, and key outcomes or takeaways on the right, connected with subtle arrows.",
+      "Use flat vector icons, simple illustrations, small labeled callouts, and short sans-serif captions only — no long paragraphs.",
+      "Use a restrained two or three color accent palette with strong typographic hierarchy.",
+      "Aim for the polished look of a top journal or Nature-style graphical abstract."
+    ].join(" "),
+    keywords: [
+      "scientific visual abstract",
+      "graphical abstract style",
+      "single integrated overview diagram",
+      "flat vector icons",
+      "left-to-right input-process-outcome flow",
+      "clean editorial infographic"
+    ]
+  },
   minimal_infographic: {
     name: "シンプル図解",
     shortDescription: "白背景で要点を読みやすく整理。迷ったらこれ。",

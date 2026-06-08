@@ -13,6 +13,7 @@ export type ProjectStatus =
 
 export type Audience = "beginner";
 export type SlideTheme =
+  | "visual_abstract"
   | "minimal_infographic"
   | "timeline_process"
   | "concept_mindmap"

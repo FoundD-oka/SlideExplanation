@@ -78,7 +78,7 @@ export default function Home() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [slideCount, setSlideCount] = useState(10);
+  const [slideCount, setSlideCount] = useState(4);
   const [theme, setTheme] = useState<SlideTheme>(DEFAULT_SLIDE_THEME);
   const [imageSize, setImageSize] = useState<ImageSize>("2048x1152");
   const [slides, setSlides] = useState<ApiSlide[]>([]);
@@ -644,7 +644,7 @@ function SettingsScreen(props: {
             <div className="mt-2 flex h-12 items-center justify-between rounded-[8px] border border-slate-200 px-3">
               <span className="font-bold">{props.slideCount}枚</span>
               <div className="flex items-center gap-2">
-                <IconButton label="減らす" onClick={() => props.setSlideCount(Math.max(5, props.slideCount - 1))}>
+                <IconButton label="減らす" onClick={() => props.setSlideCount(Math.max(4, props.slideCount - 1))}>
                   <Minus className="h-4 w-4" />
                 </IconButton>
                 <IconButton label="増やす" onClick={() => props.setSlideCount(Math.min(20, props.slideCount + 1))}>
